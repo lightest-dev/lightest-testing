@@ -5,6 +5,7 @@ import time
 import os
 import shutil
 import checker
+import json
 
 
 class server():
@@ -16,9 +17,12 @@ class server():
         self.sock.bind(self.server_address)
         self.filename = ""
         self.code_upload = ""
-        self.extension = ""
         self.memory = 0
         self.time = 0
+        self.tests_count = 0
+        self.checker_id = 0
+        self.checker_folder = "checkers"
+        self.code_checker = checker.code_checker(self.checker_folder)
 
     def listen(self):
         self.sock.listen(1)
@@ -55,36 +59,25 @@ class server():
                 return
 
     def process_data(self, type):
-        # code_upload:{upload.UploadId}
-        # code.{upload.Language.Extension}
-        # name:{filename}
+        # json or name:{filename}
         if type == 1:
             str = ""
             with open('tempfile', 'r') as myfile:
                 str = myfile.read().replace('\n', '')
             if str.startswith("name:"):
                 self.filename = str[5:]
-            elif str.startswith("code_upload:"):
-                if self.code_upload:
-                    shutil.rmtree(self.code_upload, True)
-                self.code_upload = str[12:]
-                os.mkdir(self.code_upload, 700)
-            elif str.startswith("code"):
-                self.filename = str
-                _, file_extension = os.path.splitext(str)
-                self.extension = file_extension
-                self.check(self.filename)
-            elif str.startswith("time:"):
-                self.time = int(str[5:])
-            elif str.startswith("memory:"):
-                self.memory = int(str[7:])
+            elif str.startswith("{"):
+                self.parse_json(str)
         elif type == 2:
             os.rename("tempfile", os.path.join(
                 self.code_upload, self.filename))
+            if self.filename.startswith("code"):
+                self.check(self.filename)
 
     def check(self, path):
         tests_count = 0
-        compile_result = checker.compile(os.path.join(self.code_upload, path))
+        compile_result = self.code_checker.compile(
+            os.path.join(self.code_upload, path))
         if compile_result["error"]:
             result = {
                 "failedTests": tests_count,
@@ -107,3 +100,24 @@ class server():
             time.sleep(1)
             self.send_result(data, tries + 1)
         return
+
+    def parse_json(self, text):
+        in_json = json.loads(text)
+        if "type" in in_json:
+            self.parse_upload(in_json)
+        else:
+            self.parse_checker(in_json)
+
+    def parse_checker(self, checker_json):
+        path = os.path.join(self.checker_folder, checker_json["id"])
+        f = open(path, "w+")
+        f.write(checker_json["code"])
+        result = self.code_checker.compile_checker(checker_json["id"])
+        self.send_result(result)
+
+    def parse_upload(self, upload_json):
+        self.code_upload = upload_json["uploadId"]
+        self.memory = upload_json["memory_limit"]
+        self.time = upload_json["timeLimit"]
+        self.tests_count = upload_json["testsCount"]
+        self.checker_id = upload_json["checker_id"]
