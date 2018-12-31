@@ -15,26 +15,28 @@ class code_checker():
         @param stdin: file used as standard input
         """
         executor = RunExecutor()
+        args = command.split(' ')
         try:
             result = executor.execute_run(
-                command, "run.log", memlimit=memory, hardtimelimit=time, files_count_limit=file_count, stdin=stdin)
-            return result
+                args, "run.log", memlimit=memory, hardtimelimit=time, files_count_limit=file_count, stdin=stdin)
+            if result['cputime'] is not None and result['cputime'] > time:
+                result['terminationreason'] = 'cputime'
         except:
-            # todo: check result value and return some error
-            return None
+            result = {'terminationreason': 'something went wrong'}
+        return result
 
     def compile(self, filename):
         _, file_extension = os.path.splitext(filename)
-        if file_extension == "cpp":
-            result = self.run_command("g++ -O2 -std=c++14 " + filename +
-                                      " -o compiled.run", 30000)
+        if file_extension == ".cpp":
+            result = self.run_command('g++ -O2 -std=c++14 ' + filename +
+                                      ' -o compiled.run', 30000)
             return result
-        elif file_extension == "c":
+        elif file_extension == ".c":
             result = self.run_command("g++ -O2 -std=c11 " + filename +
                                       " -o compiled.run", 30000)
             return result
-        elif file_extension == "py":
-            return {"error": ""}
+        elif file_extension == ".py":
+            return {"error": "python is not supported"}
         return {"error": "Unknown format!"}
 
     def run_checker(self, checker_name, data_path, memory, time):
@@ -46,18 +48,23 @@ class code_checker():
     def run_test(self, checker, input_path, output_path, memory, time):
         input = os.open(input_path, "r")
         result = self.run_command(
-            "compiled.run > temp.out", time,
+            "compiled.run", time,
             memory=memory, file_count=1, stdin=input)
         input.close()
+        # parse run.log to get output
         # check if run is ok
         result = self.run_command(" ".join([checker, input_path, "temp.out", output_path]), time,
                                   memory=memory, file_count=0)
-        # parse result
+        if result['terminationreason'] is not None:
+            result = {'error': 'Checker is not working'}
+        else:
+            result = {'code': result['exitcode']}
         return result
 
     def compile_checker(self, name):
         path = os.path.join(self.checker_folder, name)
         result = self.run_command("g++ -I" + self.checker_folder + " -O2 -std=c++11 " + path +
                                   " -o " + name + ".run", 0, 30000)
-        # parse result
+        if result['terminationreason'] is not None or result['exitcode'] != 0:
+            result = {'error': 'Checker is not compiling'}
         return result
