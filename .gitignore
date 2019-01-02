@@ -1,7 +1,8 @@
 .vscode
-compiled.run
+*.run
 run.log
 temp.out
+testlib.h
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
