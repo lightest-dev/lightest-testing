@@ -5,18 +5,30 @@ from glob import glob
 
 class code_checker():
     def __init__(self, checker_folder):
+        """Creates new instance
+
+        Arguments:
+            checker_folder {string} -- path to folder with checkers
+        """
         self.checker_folder = checker_folder
         self.output_log_file = 'run.log'
         self.output_file = './temp.out'
         self.separator = '--------------------------------------------------------------------------------'
 
     def __run_command__(self, command, time, memory=None, file_count=None, stdin=None):
-        """
-        @param command: command to be run
-        @param memory: memory limit in bytes
-        @param time: time limit in seconds after which process is forcefully killed
-        @param file_count: maximum number of file the process can write
-        @param stdin: file used as standard input
+        """Runs specified command
+
+        Arguments:
+            command {string} -- command to be run
+            time {float} -- time limit in seconds
+
+        Keyword Arguments:
+            memory {integer} -- memory limit in bytes (default: {None})
+            file_count {integer} -- maximum number of files to write (default: {None})
+            stdin {file} -- file used as standard input (default: {None})
+
+        Returns:
+            OrderedDict -- dict with results
         """
         executor = RunExecutor()
         args = command.split(' ')
@@ -30,6 +42,14 @@ class code_checker():
         return result
 
     def compile(self, filename):
+        """Compiles specified file
+
+        Arguments:
+            filename {string} -- Name of file to compile
+
+        Returns:
+            dict -- dictionary with code or error
+        """
         _, file_extension = os.path.splitext(filename)
         if file_extension == ".cpp":
             result = self.__run_command__('g++ -O2 -std=c++14 ' + filename +
@@ -44,12 +64,16 @@ class code_checker():
         return {"error": "Unknown format!"}
 
     def run_checker(self, checker_name, data_path, memory, time):
-        """
-        @param checker_name: checker name without extension
-        @param data_path: path to input and output files
-        @param memory: memory limit in bytes
-        @param time: time limit in seconds after which process is forcefully killed
-        @return: result dictionary with passed_tests and failed_tests or with error if there is error with tests
+        """Runs checker
+
+        Arguments:
+            checker_name {string} -- checker name without extension
+            data_path {string} -- path to input and output files
+            memory {integer} -- memory limit in bytes
+            time {float} -- time limit in seconds after which process is forcefully killed
+
+        Returns:
+            dict -- dictionary with passed_tests and failed_tests or with error if there is error with tests
         """
         checker_path = os.path.join(self.checker_folder, checker_name + ".run")
         input_file_format = os.path.join(data_path, '*.in')
@@ -79,6 +103,18 @@ class code_checker():
         return result
 
     def __run_test__(self, checker, input_path, output_path, memory, time):
+        """Runs checker for specified files
+
+        Arguments:
+            checker {string} -- name of checker
+            input_path {string} -- name of input file
+            output_path {string} -- name of correct output file
+            memory {integer} -- memory limit in bytes
+            time {float} -- time limit in seconds
+
+        Returns:
+            dict -- dictionary with error or exit code
+        """
         with open(input_path, "r") as input:
             result = self.__run_command__(
                 "./compiled.run", time,
@@ -87,7 +123,6 @@ class code_checker():
         if not result_exists:
             result = {'error': 'User output is empty'}
             return result
-        # check if run is ok
         result = self.__run_command__(" ".join([checker, input_path, self.output_file, output_path]), time,
                                       memory=memory, file_count=0)
         if 'terminationreason' in result:
@@ -97,17 +132,29 @@ class code_checker():
         return result
 
     def compile_checker(self, name):
+        """Compiles checker
+
+        Arguments:
+            name {string} -- name of checker to compile
+
+        Returns:
+            dict -- dictionary with error or exitcode
+        """
         path = os.path.join(self.checker_folder, name + '.cpp')
         result_path = os.path.join(self.checker_folder, name + '.run')
         result = self.__run_command__("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
                                       " -o " + result_path, 30000)
         if 'terminationreason' in result or result['exitcode'] != 0:
             result = {'error': 'Checker is not compiling'}
+        code = result['exitcode']
+        result = {'code': code}
         return result
 
     def __parse_log__(self):
-        """
-        copies program output from log file to output file
+        """Copies output from temp file to output file
+
+        Returns:
+            boolean -- if any content was copied
         """
         log_end_found = False
         content_found = False
