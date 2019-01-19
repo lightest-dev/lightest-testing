@@ -11,6 +11,8 @@ import json
 class server():
     def __init__(self, api_server, checker_folder, tests_folder):
         self.temp_file = 'tempfile'
+        if not api_server.endswith('/'):
+            api_server = api_server+'/'
         self.api_server = api_server
         self.max_tries = 5
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -95,7 +97,7 @@ class server():
                 'type': 'Code',
                 'uploadId': self.code_upload
             }
-            self.send_result(message)
+            self.send_result(message, 'result')
             return
         result = self.code_checker.run_checker(
             self.checker_id, self.tests_folder, self.memory, self.time)
@@ -108,7 +110,7 @@ class server():
                 'type': 'Code',
                 'uploadId': self.code_upload
             }
-            self.send_result(message)
+            self.send_result(message, 'result')
             return
         message = {
             'failedTests': result['failed_tests'],
@@ -118,23 +120,24 @@ class server():
             'type': 'Code',
             'uploadId': self.code_upload
         }
-        self.send_result(message)
+        self.send_result(message, 'result')
 
-    def send_result(self, data, tries=0):
+    def send_result(self, data, endpoint, tries=0):
         """Sends result to remote server
 
         Arguments:
             data {dict} -- json to send to remote
+            endpoint {string} -- endpoitn to send data to
 
         Keyword Arguments:
             tries {int} -- maximum atempts to send data (default: {0})
         """
-        r = requests.post(self.api_server, json=data)
+        r = requests.post(self.api_server + endpoint, json=data)
         if r.status_code != 200:
             if tries == self.max_tries:
                 return
             time.sleep(1)
-            self.send_result(data, tries + 1)
+            self.send_result(data, endpoint, tries + 1)
         return
 
     def parse_json(self, text):
@@ -165,7 +168,8 @@ class server():
         f = open(path, 'w+')
         f.write(checker_json['code'])
         result = self.code_checker.compile_checker(checker_json['id'])
-        self.send_result(result)
+        result['id'] = checker_json['id']
+        self.send_result(result, 'checker-result')
 
     def parse_upload(self, upload_json):
         """Parses user upload json
@@ -188,7 +192,7 @@ class server():
         # type: code, test
         self.current_file = {
             'filename': file_json['filename'],
-            'type': file_json['type']
+            'type': file_json['fileType']
         }
 
     def parse_tests(self, tests_json):

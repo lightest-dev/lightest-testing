@@ -144,11 +144,14 @@ class code_checker():
         result_path = os.path.join(self.checker_folder, name + '.run')
         result = self.__run_command__("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
                                       " -o " + result_path, 30000)
-        if 'terminationreason' in result or result['exitcode'] != 0:
-            result = {'error': 'Checker is not compiling'}
         code = result['exitcode']
-        result = {'code': code}
-        return result
+        compilation_result = {
+            'compiled': code == 0,
+            'message': ''
+        }
+        if 'terminationreason' in result or result['exitcode'] != 0:
+            compilation_result['message'] = result['terminationreason']
+        return compilation_result
 
     def __parse_log__(self):
         """Copies output from temp file to output file
