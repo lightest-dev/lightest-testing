@@ -6,18 +6,17 @@ import os
 import shutil
 import checker
 import json
+import asyncio
+import uuid
 
 
 class server():
     def __init__(self, api_server, checker_folder, tests_folder):
-        self.temp_file = 'tempfile'
         if not api_server.endswith('/'):
             api_server = api_server+'/'
         self.api_server = api_server
         self.max_tries = 5
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_address = ('localhost', 10000)
-        self.sock.bind(self.server_address)
         self.current_file = {}
         self.code_upload = ""
         self.memory = 0
@@ -28,46 +27,42 @@ class server():
         self.tests_folder = tests_folder
         self.code_checker = checker.code_checker(self.checker_folder)
 
-    def listen(self):
-        self.sock.listen(1)
-        while True:
-            self.connection, self.client_address = self.sock.accept()
-            try:
-                self.read_data(self.connection)
-            finally:
-                self.connection.close()
+    def start(self):
+        loop = asyncio.get_event_loop()
+        loop.create_task(asyncio.start_server(
+            self.read_data, 'localhost', 10000))
+        loop.run_forever()
 
-    def read_data(self, connection):
-        f = open(self.temp_file, "wb+")
-        toread = 0
-        started = False
+    async def read_data(self, reader, writer):
+        # todo: resolve race conditions
+        temp_file = str(uuid.uuid4())
+        f = open(temp_file, "wb+")
         type = 0
-        buf = bytearray(16)
-        view = memoryview(buf)
-        while True:
-            length = self.sock.recv_into(view, 16)
-            if length:
-                if toread == 0:
-                    if started:
-                        f.close()
-                        self.process_data(type)
-                        started = False
-                        f = open(self.temp_file, "wb+")
-                    started = True
-                    toread = int.from_bytes(view[:4], signed=True)
-                    type = view[4]
-                    f.write(view[5:length])
-                    toread = toread + 1 - length
-                f.write(view)
-                toread = toread - length
-            else:
-                return
+        length_bytes = await reader.read(4)
+        length = int.from_bytes(length_bytes, byteorder='little', signed=True)
+        type = await reader.read(1)
+        length = length - 1
+        bytes_read = 0
 
-    def process_data(self, type):
+        while True:
+            chunk = await reader.read(16)
+            read = len(chunk)
+            bytes_read += read
+            if read:
+                f.write(chunk)
+                if bytes_read == length:
+                    f.close()
+                    self.process_data(type, temp_file)
+                    break
+            else:
+                f.close()
+                break
+
+    def process_data(self, type, temp_file):
         # json
         if type == 1:
             str = ""
-            with open(self.temp_file, 'r') as myfile:
+            with open(temp_file, 'r') as myfile:
                 str = myfile.read().replace('\n', '')
             if str.startswith("{"):
                 self.parse_json(str)
@@ -78,11 +73,11 @@ class server():
             if file_type == 'code':
                 _, ext = os.path.splitext(file)
                 path = os.path.join('./', self.code_upload + ext)
-                os.rename(self.temp_file, path)
+                os.rename(temp_file, path)
                 self.check(path)
             elif file_type == 'test':
                 path = os.path.join(self.tests_folder, file)
-                os.rename(self.temp_file, path)
+                os.rename(temp_file, path)
 
     def check(self, path):
         tests_count = 0
