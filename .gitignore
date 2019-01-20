@@ -4,6 +4,7 @@ checkers
 run.log
 temp.out
 testlib.h
+settings.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

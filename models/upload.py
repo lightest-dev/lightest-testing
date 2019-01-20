@@ -1,4 +1,4 @@
-class upload():
+class Upload():
     def __init__(self, upload_json):
         """Parses user upload json
 

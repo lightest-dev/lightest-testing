@@ -1,4 +1,4 @@
-class file():
+class File():
     def __init__(self, file_json):
         """Parses json with file description
 

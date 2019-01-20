@@ -3,7 +3,7 @@ import os
 from glob import glob
 
 
-class code_checker():
+class CodeChecker():
     def __init__(self, checker_folder):
         """Creates new instance
 
@@ -14,11 +14,11 @@ class code_checker():
         # checker compilation can be long, can be used to wait for finish
         self.checker_compiling = False
         self.checker_compilation_max_time = 30
-        self.__output_log_file__ = 'run.log'
-        self.__output_file__ = './temp.out'
-        self.__separator__ = '--------------------------------------------------------------------------------'
+        self._output_log_file = 'run.log'
+        self._output_file = './temp.out'
+        self._separator = '--------------------------------------------------------------------------------'
 
-    def __run_command__(self, command, time, memory=None, file_count=None, stdin=None):
+    def _run_command(self, command, time, memory=None, file_count=None, stdin=None):
         """Runs specified command
 
         Arguments:
@@ -37,7 +37,7 @@ class code_checker():
         args = command.split(' ')
         try:
             result = executor.execute_run(
-                args, self.__output_log_file__, memlimit=memory, hardtimelimit=time, files_count_limit=file_count, stdin=stdin)
+                args, self._output_log_file, memlimit=memory, hardtimelimit=time, files_count_limit=file_count, stdin=stdin)
             if 'cputime' in result and result['cputime'] > time:
                 result['terminationreason'] = 'cputime'
         except:
@@ -55,11 +55,11 @@ class code_checker():
         """
         _, file_extension = os.path.splitext(filename)
         if file_extension == ".cpp":
-            result = self.__run_command__('g++ -O2 -std=c++14 ' + filename +
-                                          ' -o compiled.run', 30000)
+            result = self._run_command('g++ -O2 -std=c++14 ' + filename +
+                                       ' -o compiled.run', 30000)
         elif file_extension == ".c":
-            result = self.__run_command__("g++ -O2 -std=c11 " + filename +
-                                          " -o compiled.run", 30000)
+            result = self._run_command("g++ -O2 -std=c11 " + filename +
+                                       " -o compiled.run", 30000)
         elif file_extension == ".py":
             result = {"error": "python is not supported"}
         else:
@@ -89,7 +89,7 @@ class code_checker():
             if not os.path.isfile(output_file):
                 result = {'error': 'Output file for test is missing'}
                 return result
-            test_result = self.__run_test__(
+            test_result = self._run_test(
                 checker_path, filename, output_file, memory, time)
             if 'error' in test_result:
                 if test_result['error'] == 'Checker is not working':
@@ -105,7 +105,7 @@ class code_checker():
         }
         return result
 
-    def __run_test__(self, checker, input_path, output_path, memory, time):
+    def _run_test(self, checker, input_path, output_path, memory, time):
         """Runs checker for specified files
 
         Arguments:
@@ -119,15 +119,15 @@ class code_checker():
             dict -- dictionary with error or exit code
         """
         with open(input_path, "r") as input:
-            result = self.__run_command__(
+            result = self._run_command(
                 "./compiled.run", time,
                 memory=memory, file_count=1, stdin=input)
-        result_exists = self.__parse_log__()
+        result_exists = self._parse_log()
         if not result_exists:
             result = {'error': 'User output is empty'}
             return result
-        result = self.__run_command__(" ".join([checker, input_path, self.__output_file__, output_path]), time,
-                                      memory=memory, file_count=0)
+        result = self._run_command(" ".join([checker, input_path, self._output_file, output_path]), time,
+                                   memory=memory, file_count=0)
         if 'terminationreason' in result:
             result = {'error': 'Checker is not working'}
         else:
@@ -146,8 +146,8 @@ class code_checker():
         self.checker_compiling = True
         path = os.path.join(self.checker_folder, name + '.cpp')
         result_path = os.path.join(self.checker_folder, name + '.run')
-        result = self.__run_command__("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
-                                      " -o " + result_path, self.checker_compilation_max_time * 1000)
+        result = self._run_command("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
+                                   " -o " + result_path, self.checker_compilation_max_time * 1000)
         code = result['exitcode']
         compilation_result = {
             'compiled': code == 0,
@@ -158,7 +158,7 @@ class code_checker():
         self.checker_compiling = False
         return compilation_result
 
-    def __parse_log__(self):
+    def _parse_log(self):
         """Copies output from temp file to output file
 
         Returns:
@@ -166,7 +166,7 @@ class code_checker():
         """
         log_end_found = False
         content_found = False
-        with open(self.__output_log_file__, 'r') as log, open(self.__output_file__, 'w') as output:
+        with open(self._output_log_file, 'r') as log, open(self._output_file, 'w') as output:
             content = log.readlines()
             for line in content:
                 if content_found:
@@ -176,6 +176,6 @@ class code_checker():
                     if stripped:
                         content_found = True
                         output.write(line)
-                elif line.strip() == self.__separator__:
+                elif line.strip() == self._separator:
                     log_end_found = True
         return content_found
