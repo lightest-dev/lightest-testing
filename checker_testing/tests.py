@@ -1,6 +1,6 @@
-from checker import code_checker
+from .. import checker
 
-checker = code_checker("./checkers")
+checker = checker.code_checker("./checkers")
 memory_limit = 128*1028*1024
 result = checker.compile_checker('integer')
 result = checker.compile('./testing/sum_console.cpp')

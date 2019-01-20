@@ -11,9 +11,12 @@ class code_checker():
             checker_folder {string} -- path to folder with checkers
         """
         self.checker_folder = checker_folder
-        self.output_log_file = 'run.log'
-        self.output_file = './temp.out'
-        self.separator = '--------------------------------------------------------------------------------'
+        # checker compilation can be long, can be used to wait for finish
+        self.checker_compiling = False
+        self.checker_compilation_max_time = 30
+        self.__output_log_file__ = 'run.log'
+        self.__output_file__ = './temp.out'
+        self.__separator__ = '--------------------------------------------------------------------------------'
 
     def __run_command__(self, command, time, memory=None, file_count=None, stdin=None):
         """Runs specified command
@@ -34,7 +37,7 @@ class code_checker():
         args = command.split(' ')
         try:
             result = executor.execute_run(
-                args, self.output_log_file, memlimit=memory, hardtimelimit=time, files_count_limit=file_count, stdin=stdin)
+                args, self.__output_log_file__, memlimit=memory, hardtimelimit=time, files_count_limit=file_count, stdin=stdin)
             if 'cputime' in result and result['cputime'] > time:
                 result['terminationreason'] = 'cputime'
         except:
@@ -54,14 +57,14 @@ class code_checker():
         if file_extension == ".cpp":
             result = self.__run_command__('g++ -O2 -std=c++14 ' + filename +
                                           ' -o compiled.run', 30000)
-            return result
         elif file_extension == ".c":
             result = self.__run_command__("g++ -O2 -std=c11 " + filename +
                                           " -o compiled.run", 30000)
-            return result
         elif file_extension == ".py":
-            return {"error": "python is not supported"}
-        return {"error": "Unknown format!"}
+            result = {"error": "python is not supported"}
+        else:
+            result = {"error": "Unknown format!"}
+        return result
 
     def run_checker(self, checker_name, data_path, memory, time):
         """Runs checker
@@ -123,7 +126,7 @@ class code_checker():
         if not result_exists:
             result = {'error': 'User output is empty'}
             return result
-        result = self.__run_command__(" ".join([checker, input_path, self.output_file, output_path]), time,
+        result = self.__run_command__(" ".join([checker, input_path, self.__output_file__, output_path]), time,
                                       memory=memory, file_count=0)
         if 'terminationreason' in result:
             result = {'error': 'Checker is not working'}
@@ -140,10 +143,11 @@ class code_checker():
         Returns:
             dict -- dictionary with error or exitcode
         """
+        self.checker_compiling = True
         path = os.path.join(self.checker_folder, name + '.cpp')
         result_path = os.path.join(self.checker_folder, name + '.run')
         result = self.__run_command__("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
-                                      " -o " + result_path, 30000)
+                                      " -o " + result_path, self.checker_compilation_max_time * 1000)
         code = result['exitcode']
         compilation_result = {
             'compiled': code == 0,
@@ -151,6 +155,7 @@ class code_checker():
         }
         if 'terminationreason' in result or result['exitcode'] != 0:
             compilation_result['message'] = result['terminationreason']
+        self.checker_compiling = False
         return compilation_result
 
     def __parse_log__(self):
@@ -161,7 +166,7 @@ class code_checker():
         """
         log_end_found = False
         content_found = False
-        with open(self.output_log_file, 'r') as log, open(self.output_file, 'w') as output:
+        with open(self.__output_log_file__, 'r') as log, open(self.__output_file__, 'w') as output:
             content = log.readlines()
             for line in content:
                 if content_found:
@@ -171,6 +176,6 @@ class code_checker():
                     if stripped:
                         content_found = True
                         output.write(line)
-                elif line.strip() == self.separator:
+                elif line.strip() == self.__separator__:
                     log_end_found = True
         return content_found
