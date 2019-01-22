@@ -13,7 +13,6 @@ class Server():
     def __init__(self, settings):
         self.max_tries = 5
         self._upload = None
-        self._current_file = None
         self._settings = settings
         self._code_checker = CodeChecker(self._settings.checker_folder)
 
@@ -34,15 +33,37 @@ class Server():
     async def _read_data(self, reader, writer):
         # todo: resolve race conditions
         # should be resolved but left here just in case
-        temp_file = str(uuid.uuid4())
-        f = open(temp_file, "wb+")
         type = 0
-        length_bytes = await reader.read(4)
+        length_bytes = await reader.read(8)
         length = int.from_bytes(length_bytes, byteorder='little', signed=True)
         type = await reader.read(1)
-        length = length - 1
-        bytes_read = 0
+        length -= 1
 
+        if type == 1:
+            chunk = await reader.read(length)
+            message = chunk.decode(encoding='utf-8')
+            await self._parse_json(message)
+        elif type == 2:
+            await self._parse_file(reader, length)
+
+    async def _parse_file(self, reader, length):
+        temp_file = str(uuid.uuid4())
+        length_bytes = await reader.read(4)
+        length -= 4
+        message_length = int.from_bytes(
+            length_bytes, byteorder='little', signed=True)
+        chunk = await reader.read(message_length)
+        message = chunk.decode(encoding='utf-8')
+        in_json = json.loads(message)
+        current_file = File(in_json)
+        length -= len(chunk)
+        successful = await self._read_file(reader, length, temp_file)
+        if successful:
+            await self._process_file(current_file, temp_file)
+
+    async def _read_file(self, reader, length, filename):
+        f = open(filename, "wb+")
+        bytes_read = 0
         while True:
             to_read = 2048
             if length - bytes_read < to_read:
@@ -54,34 +75,24 @@ class Server():
                 f.write(chunk)
                 if bytes_read == length:
                     f.close()
-                    await self._process_data(type, temp_file)
-                    break
+                    return True
             else:
                 f.close()
-                os.remove(temp_file)
-                break
+                os.remove(filename)
+                return False
 
-    async def _process_data(self, type, temp_file):
-        # json
-        if type == 1:
-            str = ""
-            with open(temp_file, 'r') as myfile:
-                str = myfile.read().replace('\n', '')
-            if str.startswith("{"):
-                await self._parse_json(str)
-        # file
-        elif type == 2:
-            file = self._current_file.filename
-            file_type = self._current_file.type
-            if file_type == 'code':
-                _, ext = os.path.splitext(file)
-                path = os.path.join('./', self._upload.id + ext)
-                os.rename(temp_file, path)
-                await self._check(path)
-            elif file_type == 'test':
-                path = os.path.join(self._settings.tests_folder, file)
-                if self._upload.received_tests == 0:
-                    await self._clean_tests()
+    async def _process_file(self, current_file, temp_file):
+        file = current_file.filename
+        file_type = current_file.type
+        if file_type == 'code':
+            _, ext = os.path.splitext(file)
+            path = os.path.join('./', self._upload.id + ext)
+            os.rename(temp_file, path)
+            await self._check(path)
+        elif file_type == 'test':
+            path = os.path.join(self._settings.tests_folder, file)
+            if self._upload.received_tests == 0:
+                await self._clean_tests()
                 os.rename(temp_file, path)
                 self._upload.received_tests += 1
 
@@ -163,8 +174,6 @@ class Server():
         # checker code is passed in json
         elif in_json['type'] == 'checker':
             await self._parse_checker(in_json)
-        elif in_json['type'] == 'file':
-            self._current_file = File(in_json)
 
     async def _parse_checker(self, checker_json):
         """Parses checker description and compiles it
