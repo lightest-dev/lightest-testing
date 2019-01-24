@@ -9,7 +9,7 @@ from models.sent_file import File
 from hasher import get_server_hash
 
 
-class Server():
+class Server:
     def __init__(self, settings):
         self.max_tries = 5
         self._upload = None
@@ -17,11 +17,9 @@ class Server():
         self._code_checker = CodeChecker(self._settings.checker_folder)
 
     async def start(self):
-        loop = asyncio.get_event_loop()
         await self._notify_started()
-        loop.create_task(asyncio.start_server(
-            self._read_data, 'localhost', 10000))
-        loop.run_forever()
+        server = await asyncio.start_server(self._read_data, 'localhost', 10000)
+        await server.serve_forever()
 
     async def _notify_started(self):
         hash = get_server_hash()
@@ -33,7 +31,6 @@ class Server():
     async def _read_data(self, reader, writer):
         # todo: resolve race conditions
         # should be resolved but left here just in case
-        type = 0
         length_bytes = await reader.read(8)
         length = int.from_bytes(length_bytes, byteorder='little', signed=True)
         type = await reader.read(1)
@@ -45,6 +42,7 @@ class Server():
             await self._parse_json(message)
         elif type == 2:
             await self._parse_file(reader, length)
+        writer.close()
 
     async def _parse_file(self, reader, length):
         temp_file = str(uuid.uuid4())
@@ -82,6 +80,7 @@ class Server():
                 return False
 
     async def _process_file(self, current_file, temp_file):
+        await self._wait_upload()
         file = current_file.filename
         file_type = current_file.type
         if file_type == 'code':
@@ -107,6 +106,7 @@ class Server():
                 'type': 'Code',
                 'uploadId': self._upload.id
             }
+            self._upload = None
             await self._send_message(message, 'result')
             return
 
@@ -120,6 +120,7 @@ class Server():
                 'type': 'Code',
                 'uploadId': self._upload.id
             }
+            self._upload = None
             await self._send_message(message, 'result')
             return
         result = self._code_checker.run_checker(
@@ -134,6 +135,7 @@ class Server():
                 'type': 'Code',
                 'uploadId': self._upload.id
             }
+            self._upload = None
             await self._send_message(message, 'result')
             return
         message = {
@@ -144,6 +146,7 @@ class Server():
             'type': 'Code',
             'uploadId': self._upload.id
         }
+        self._upload = None
         await self._send_message(message, 'result')
 
     async def _send_message(self, data, endpoint):
@@ -226,3 +229,12 @@ class Server():
             tries += 1
             await asyncio.sleep(1)
         return True
+
+    async def _wait_upload(self):
+        tries = 0
+        max_tries = self.max_tries * 5
+        while self._upload is None:
+            if tries == max_tries:
+                return False
+            tries += 1
+            await asyncio.sleep(1)
