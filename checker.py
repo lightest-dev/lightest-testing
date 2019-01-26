@@ -153,8 +153,10 @@ class CodeChecker():
             'compiled': code == 0,
             'message': ''
         }
-        if 'terminationreason' in result or result['exitcode'] != 0:
+        if 'terminationreason' in result:
             compilation_result['message'] = result['terminationreason']
+        elif code != 0:
+            compilation_result['message'] = 'Something went wrong with checker!'
         self.checker_compiling = False
         return compilation_result
 

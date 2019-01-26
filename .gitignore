@@ -5,6 +5,8 @@ run.log
 temp.out
 testlib.h
 settings.json
+.idea
+tests
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

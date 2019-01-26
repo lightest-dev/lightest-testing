@@ -5,9 +5,10 @@ class Upload():
         Arguments:
             upload_json {dict} -- dict with upload configuration
         """
-        self.id = upload_json['uploadId']
-        self.memory = upload_json['memoryLimit']
-        self.time = upload_json['timeLimit']
-        self.tests_count = upload_json['testsCount']
-        self.checker_id = upload_json['checkerId']
+        self.id = upload_json['UploadId']
+        # convert memory to bytes from MB
+        self.memory = upload_json['MemoryLimit'] * (2**20)
+        self.time = upload_json['TimeLimit']
+        self.tests_count = upload_json['TestsCount']
+        self.checker_id = upload_json['CheckerId']
         self.received_tests = 0

@@ -5,5 +5,5 @@ class File():
         Arguments:
             file_json {dict} -- dictionary with filename and type of file
         """
-        self.filename = file_json['filename']
-        self.type = file_json['fileType']
+        self.filename = file_json['Filename']
+        self.type = file_json['FileType']

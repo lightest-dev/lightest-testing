@@ -17,11 +17,13 @@ class Server:
         self._code_checker = CodeChecker(self._settings.checker_folder)
 
     async def start(self):
-        await self._notify_started()
+        asyncio.create_task(self._notify_started())
         server = await asyncio.start_server(self._read_data, 'localhost', 10000)
         await server.serve_forever()
 
     async def _notify_started(self):
+        # wait for server to properly initialize
+        await asyncio.sleep(20)
         hash = get_server_hash()
         message = {
             'serverVersion': hash
@@ -33,7 +35,8 @@ class Server:
         # should be resolved but left here just in case
         length_bytes = await reader.read(8)
         length = int.from_bytes(length_bytes, byteorder='little', signed=True)
-        type = await reader.read(1)
+        type_bytes = await reader.read(1)
+        type = int.from_bytes(type_bytes, byteorder='little', signed=True)
         length -= 1
 
         if type == 1:
@@ -80,10 +83,10 @@ class Server:
                 return False
 
     async def _process_file(self, current_file, temp_file):
-        await self._wait_upload()
         file = current_file.filename
         file_type = current_file.type
         if file_type == 'code':
+            await self._wait_upload()
             _, ext = os.path.splitext(file)
             path = os.path.join('./', self._upload.id + ext)
             os.rename(temp_file, path)
@@ -92,8 +95,8 @@ class Server:
             path = os.path.join(self._settings.tests_folder, file)
             if self._upload.received_tests == 0:
                 await self._clean_tests()
-                os.rename(temp_file, path)
-                self._upload.received_tests += 1
+            os.rename(temp_file, path)
+            self._upload.received_tests += 1
 
     async def _check(self, upload_file):
         ready = await self._ensure_ready()
@@ -110,6 +113,7 @@ class Server:
             await self._send_message(message, 'result')
             return
 
+        # todo: fix return type
         compile_result = self._code_checker.compile(upload_file)
         if 'error' in compile_result:
             message = {
@@ -157,13 +161,23 @@ class Server:
             endpoint {string} -- endpoint to send data to
         """
         tries = 0
-        r = requests.post(self._settings.api_server + endpoint, json=data)
-        while r.status_code != 200:
-            if tries == self.max_tries:
-                break
-            await asyncio.sleep(5)
-            tries += 1
-            r = requests.post(self._settings.api_server + endpoint, json=data)
+        successful = False
+        while not successful:
+            try:
+                if tries == self.max_tries:
+                    break
+                r = requests.post(
+                    self._settings.api_server + endpoint, json=data)
+                successful = (r.status_code == 200)
+                # uncomment for testing
+                # break
+                if successful:
+                    break
+                await asyncio.sleep(5)
+                tries += 1
+            except:
+                await asyncio.sleep(5)
+                tries += 1
 
     async def _parse_json(self, text):
         """Parses json provided by user
@@ -172,10 +186,10 @@ class Server:
             text {string} -- text of json data
         """
         in_json = json.loads(text)
-        if in_json['type'] == 'upload':
+        if in_json['Type'] == 'upload':
             self._upload = Upload(in_json)
         # checker code is passed in json
-        elif in_json['type'] == 'checker':
+        elif in_json['Type'] == 'checker':
             await self._parse_checker(in_json)
 
     async def _parse_checker(self, checker_json):
@@ -184,11 +198,13 @@ class Server:
         Arguments:
             checker_json {dict} -- dict with id and code of checker
         """
-        path = os.path.join(self._settings.checker_folder, checker_json['id'])
+        path = os.path.join(self._settings.checker_folder,
+                            checker_json['Id'] + '.cpp')
         f = open(path, 'w+')
-        f.write(checker_json['code'])
-        result = self._code_checker.compile_checker(checker_json['id'])
-        result['id'] = checker_json['id']
+        f.write(checker_json['Code'])
+        f.close()
+        result = self._code_checker.compile_checker(checker_json['Id'])
+        result['id'] = checker_json['Id']
         await self._send_message(result, 'checker-result')
 
     async def _clean_tests(self):
