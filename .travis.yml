@@ -5,7 +5,7 @@ services:
   - docker
 
 env:
-  - version: 0.9.${TRAVIS_BUILD_NUMBER}
+  - VERSION: 0.9.${TRAVIS_BUILD_NUMBER}
 
 script:
 - bash build.sh
