@@ -3,6 +3,7 @@ import os
 import json
 import asyncio
 import uuid
+import logging
 from checker import CodeChecker
 from models.upload import Upload
 from models.sent_file import File
@@ -17,8 +18,10 @@ class Server:
         self._code_checker = CodeChecker(self._settings.checker_folder)
 
     async def start(self):
+        if not os.path.exists(self._settings.tests_folder):
+            os.makedirs(self._settings.tests_folder)
         asyncio.create_task(self._notify_started())
-        server = await asyncio.start_server(self._read_data, 'localhost', 10000)
+        server = await asyncio.start_server(self._read_data, port=10000)
         await server.serve_forever()
 
     async def _notify_started(self):
@@ -33,19 +36,28 @@ class Server:
     async def _read_data(self, reader, writer):
         # todo: resolve race conditions
         # should be resolved but left here just in case
-        length_bytes = await reader.read(8)
-        length = int.from_bytes(length_bytes, byteorder='little', signed=True)
-        type_bytes = await reader.read(1)
-        type = int.from_bytes(type_bytes, byteorder='little', signed=True)
-        length -= 1
+        try:
+            length_bytes = await reader.read(8)
+            length = int.from_bytes(
+                length_bytes, byteorder='little', signed=True)
+            type_bytes = await reader.read(1)
+            type = int.from_bytes(type_bytes, byteorder='little', signed=True)
+            length -= 1
 
-        if type == 1:
-            chunk = await reader.read(length)
-            message = chunk.decode(encoding='utf-8')
-            await self._parse_json(message)
-        elif type == 2:
-            await self._parse_file(reader, length)
-        writer.close()
+            if type == 1:
+                chunk = await reader.read(length)
+                message = chunk.decode(encoding='utf-8')
+                await self._parse_json(message)
+            elif type == 2:
+                await self._parse_file(reader, length)
+        except Exception as e:
+            logging.error(e)
+            data = {
+                'errorMessage': str(e)
+            }
+            await self._send_message(data, 'error')
+        finally:
+            writer.close()
 
     async def _parse_file(self, reader, length):
         temp_file = str(uuid.uuid4())

@@ -4,9 +4,9 @@ checkers
 run.log
 temp.out
 testlib.h
-settings.json
 .idea
 tests
+testlib
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
