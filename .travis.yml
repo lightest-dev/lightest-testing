@@ -1,11 +1,20 @@
 language: python
 dist: xenial
+python:
+  - "3.7"
 
 services:
   - docker
 
 env:
-  - VERSION: 0.9.${TRAVIS_BUILD_NUMBER}
+  - VERSION: 0.9.0.${TRAVIS_BUILD_NUMBER}
+  - API_SERVER: https://api.lightest.xyz/
 
 script:
 - bash build.sh
+
+deploy:
+  provider: script
+  script: bash deploy.sh
+  on:
+    branch: master

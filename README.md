@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/lightest-dev/lightest-testing.svg?branch=master)](https://travis-ci.com/lightest-dev/lightest-testing)
+
 # lightest-testing
 Repository will contain testing server and sample checkers.
 
