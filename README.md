@@ -1,7 +1,7 @@
 # Build
 [![Build Status](https://travis-ci.com/lightest-dev/lightest-testing.svg?branch=master)](https://travis-ci.com/lightest-dev/lightest-testing)
 
-#Docker image
+# Docker image
 [![](https://images.microbadger.com/badges/image/deadsith/lightest-testing.svg)](https://hub.docker.com/r/deadsith/lightest-testing)
 [![](https://images.microbadger.com/badges/version/deadsith/lightest-testing.svg)](https://hub.docker.com/r/deadsith/lightest-testing)
 
