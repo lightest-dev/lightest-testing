@@ -1,4 +1,5 @@
 from benchexec.runexecutor import RunExecutor
+from benchexec.check_cgroups import check_cgroup_availability
 import os
 from glob import glob
 
@@ -10,6 +11,7 @@ class CodeChecker():
         Arguments:
             checker_folder {string} -- path to folder with checkers
         """
+        check_cgroup_availability()
         self.checker_folder = checker_folder
         # checker compilation can be long, can be used to wait for finish
         self.checker_compiling = False
