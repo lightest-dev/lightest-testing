@@ -7,8 +7,9 @@ services:
   - docker
 
 env:
-  - VERSION: 0.9.0.${TRAVIS_BUILD_NUMBER}
-  - API_SERVER: https://api.lightest.xyz/
+  global:
+    - VERSION: 0.9.0.${TRAVIS_BUILD_NUMBER}
+    - API_SERVER: https://api.lightest.xyz/
 
 script:
 - bash build.sh
