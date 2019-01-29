@@ -1,4 +1,17 @@
 FROM ubuntu:18.10
+ARG vcs_ref
+ARG build_date
+
+LABEL org.label-schema.maintainer="Andrii Vasylyk" \
+      org.label-schema.url="https://github.com/lightest-dev/lightest-testing" \
+      org.label-schema.name="Lightest testing server" \
+      org.label-schema.license="Apache-2.0" \
+      org.label-schema.version="$VERSION" \
+      org.label-schema.vcs-url="https://github.com/lightest-dev/lightest-testing" \
+      org.label-schema.vcs-ref="$vcs_ref" \
+      org.label-schema.build-date="$build_date" \
+      org.label-schema.schema-version="1.0" \
+      org.label-schema.dockerfile="/Dockerfile"
 
 RUN apt update \
 && apt install -y wget python3.7 build-essential g++ python3-tempita \

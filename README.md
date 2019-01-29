@@ -1,7 +1,10 @@
+# Build
 [![Build Status](https://travis-ci.com/lightest-dev/lightest-testing.svg?branch=master)](https://travis-ci.com/lightest-dev/lightest-testing)
 
+#Docker image
+
 # lightest-testing
-Repository will contain testing server and sample checkers.
+Repository contains testing server for lightest.
 
 # Testing
 [testlib.h](https://github.com/MikeMirzayanov/testlib) is used to create checkers. Documentation is available in repository and on [Codeforces](https://codeforces.com/blog/entry/18431).
