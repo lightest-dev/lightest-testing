@@ -9,7 +9,7 @@ services:
 env:
   global:
     - VERSION: 0.9.0.${TRAVIS_BUILD_NUMBER}
-    - API_SERVER: https://api.lightest.xyz/
+    - API_SERVER: https://api.lightest.xyz/testing/
 
 script:
 - bash build.sh
