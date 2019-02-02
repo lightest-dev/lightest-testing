@@ -3,6 +3,7 @@ class Settings():
         self.api_server = ''
         self.checker_folder = ''
         self.tests_folder = ''
+        self.ip = ''
 
     @classmethod
     def from_json(cls, data):

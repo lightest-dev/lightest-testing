@@ -32,6 +32,7 @@ class Server:
         logging.info('Sending notification')
         hash = get_server_hash()
         message = {
+            'ip': self._settings.ip,
             'serverVersion': hash
         }
         await self._send_message(message, 'free')
