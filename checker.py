@@ -66,6 +66,8 @@ class CodeChecker():
             result = {"error": "python is not supported"}
         else:
             result = {"error": "Unknown format!"}
+        if 'terminationreason' in result:
+            result = {'error': 'Checker is not working'}
         return result
 
     def run_checker(self, checker_name, data_path, memory, time):
@@ -130,10 +132,9 @@ class CodeChecker():
             return result
         result = self._run_command(" ".join([checker, input_path, self._output_file, output_path]), time,
                                    memory=memory, file_count=0)
+        result = {'code': result['exitcode']}
         if 'terminationreason' in result:
-            result = {'error': 'Checker is not working'}
-        else:
-            result = {'code': result['exitcode']}
+            result['error'] = 'Checker is not working'
         return result
 
     def compile_checker(self, name):
