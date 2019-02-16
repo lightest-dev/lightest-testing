@@ -4,7 +4,7 @@ import os
 from glob import glob
 
 
-class CodeChecker():
+class CodeChecker:
     def __init__(self, checker_folder):
         """Creates new instance
 
@@ -20,16 +20,16 @@ class CodeChecker():
         self._output_file = './temp.out'
         self._separator = '--------------------------------------------------------------------------------'
 
-    def _run_command(self, command, time, memory=None, file_count=None, stdin=None):
+    def _run_command(self, command: str, time: float, memory=None, file_count=None, stdin=None):
         """Runs specified command
 
         Arguments:
-            command {string} -- command to be run
+            command {str} -- command to be run
             time {float} -- time limit in seconds
 
         Keyword Arguments:
-            memory {integer} -- memory limit in bytes (default: {None})
-            file_count {integer} -- maximum number of files to write (default: {None})
+            memory {int} -- memory limit in bytes (default: {None})
+            file_count {int} -- maximum number of files to write (default: {None})
             stdin {file} -- file used as standard input (default: {None})
 
         Returns:
@@ -46,11 +46,11 @@ class CodeChecker():
             result = {'terminationreason': 'something went very wrong'}
         return result
 
-    def compile(self, filename):
+    def compile(self, filename: str) -> dict:
         """Compiles specified file
 
         Arguments:
-            filename {string} -- Name of file to compile
+            filename {str} -- Name of file to compile
 
         Returns:
             dict -- dictionary with code or error
@@ -66,23 +66,29 @@ class CodeChecker():
             result = {"error": "python is not supported"}
         else:
             result = {"error": "Unknown format!"}
-        if 'terminationreason' in result:
-            result = {'error': 'Checker is not working'}
+        if 'terminationreason' in result or result['exitcode'] != 0:
+            if self._copy_log():
+                result = {'error': self._get_log()}
+            else:
+                result = {'error': 'Compilation failed'}
         return result
 
-    def run_checker(self, checker_name, data_path, memory, time):
+    def run_checker(self, checker_name: str, data_path: str, memory: int, time: float) -> dict:
         """Runs checker
 
         Arguments:
-            checker_name {string} -- checker name without extension
-            data_path {string} -- path to input and output files
-            memory {integer} -- memory limit in bytes
+            checker_name {str} -- checker name without extension
+            data_path {str} -- path to input and output files
+            memory {int} -- memory limit in bytes
             time {float} -- time limit in seconds after which process is forcefully killed
 
         Returns:
             dict -- dictionary with passed_tests and failed_tests or with error if there is error with tests
         """
         checker_path = os.path.join(self.checker_folder, checker_name + ".run")
+        if not os.path.isfile(checker_path):
+            result = {'error': 'Checker is missing'}
+            return result
         input_file_format = os.path.join(data_path, '*.in')
         input_files = glob(input_file_format)
         failed_tests = 0
@@ -109,24 +115,24 @@ class CodeChecker():
         }
         return result
 
-    def _run_test(self, checker, input_path, output_path, memory, time):
+    def _run_test(self, checker: str, input_path: str, output_path: str, memory: int, time: float) -> dict:
         """Runs checker for specified files
 
         Arguments:
-            checker {string} -- name of checker
-            input_path {string} -- name of input file
-            output_path {string} -- name of correct output file
-            memory {integer} -- memory limit in bytes
+            checker {str} -- name of checker
+            input_path {str} -- name of input file
+            output_path {str} -- name of correct output file
+            memory {int} -- memory limit in bytes
             time {float} -- time limit in seconds
 
         Returns:
             dict -- dictionary with error or exit code
         """
         with open(input_path, "r") as input:
-            result = self._run_command(
+            self._run_command(
                 "./compiled.run", time,
                 memory=memory, file_count=1, stdin=input)
-        result_exists = self._parse_log()
+        result_exists = self._copy_log()
         if not result_exists:
             result = {'error': 'User output is empty'}
             return result
@@ -137,7 +143,7 @@ class CodeChecker():
             result['error'] = 'Checker is not working'
         return result
 
-    def compile_checker(self, name):
+    def compile_checker(self, name: str) -> dict:
         """Compiles checker
 
         Arguments:
@@ -159,11 +165,14 @@ class CodeChecker():
         if 'terminationreason' in result:
             compilation_result['message'] = result['terminationreason']
         elif code != 0:
-            compilation_result['message'] = 'Something went wrong with checker!'
+            if self._copy_log():
+                compilation_result['message'] = self._get_log()
+            else:
+                compilation_result['message'] = 'Something went wrong with checker!'
         self.checker_compiling = False
         return compilation_result
 
-    def _parse_log(self):
+    def _copy_log(self) -> bool:
         """Copies output from temp file to output file
 
         Returns:
@@ -184,3 +193,13 @@ class CodeChecker():
                 elif line.strip() == self._separator:
                     log_end_found = True
         return content_found
+
+    def _get_log(self) -> str:
+        """Returns config from copied log
+
+        Returns:
+            str -- content of copied log
+        """
+        with open(self._output_file, 'r') as output:
+            data = output.read()
+        return data

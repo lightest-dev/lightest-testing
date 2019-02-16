@@ -1,4 +1,4 @@
-class Settings():
+class Settings:
     def __init__(self):
         self.api_server = ''
         self.checker_folder = ''

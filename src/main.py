@@ -2,7 +2,7 @@ import asyncio
 import json
 from server import Server
 import logging
-from models.settings import Settings
+from models import Settings
 import socket
 
 if __name__ == "__main__":

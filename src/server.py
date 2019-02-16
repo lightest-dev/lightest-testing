@@ -1,70 +1,67 @@
-import requests
 import os
 import json
 import asyncio
 import uuid
 import logging
 from checker import CodeChecker
-from models.upload import Upload
-from models.sent_file import File
-from hasher import get_server_hash
+from models import Status, Settings, File, Upload
+from sender import Sender
 
 
 class Server:
-    def __init__(self, settings):
+    _max_tries: int
+    _sender: Sender
+    _status: Status
+    _code_checker: CodeChecker
+    _upload: Upload
+    _settings: Settings
+
+    def __init__(self, settings: Settings):
         logging.info('Creating server')
-        self.max_tries = 5
+        self._max_tries = 25
         self._upload = None
         self._settings = settings
         self._code_checker = CodeChecker(self._settings.checker_folder)
+        self._status = Status.Free
+        self._sender = Sender(settings)
 
     async def start(self):
         logging.info('Starting server')
         if not os.path.exists(self._settings.tests_folder):
             os.makedirs(self._settings.tests_folder)
-        asyncio.create_task(self._notify_started())
+        asyncio.create_task(self._sender.notify_started())
         server = await asyncio.start_server(self._read_data, port=10000)
         await server.serve_forever()
 
-    async def _notify_started(self):
-        # wait for server to properly initialize
-        await asyncio.sleep(20)
-        logging.info('Sending notification')
-        hash = get_server_hash()
-        message = {
-            'ip': self._settings.ip,
-            'serverVersion': hash
-        }
-        await self._send_message(message, 'free')
-
-    async def _read_data(self, reader, writer):
-        # todo: resolve race conditions
-        # should be resolved but left here just in case
+    async def _read_data(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        if self._status == Status.Free:
+            self._status = Status.Transferring
         try:
             length_bytes = await reader.read(8)
             length = int.from_bytes(
                 length_bytes, byteorder='little', signed=True)
             type_bytes = await reader.read(1)
-            type = int.from_bytes(type_bytes, byteorder='little', signed=True)
+            request_type = int.from_bytes(
+                type_bytes, byteorder='little', signed=True)
             length -= 1
-            logging.info(f"Type: {type}. Length {length}")
+            logging.info(f"Type: {request_type}. Length {length}")
 
-            if type == 1:
+            if request_type == 1:
                 chunk = await reader.read(length)
                 message = chunk.decode(encoding='utf-8')
                 await self._parse_json(message)
-            elif type == 2:
-                await self._parse_file(reader, length)
+            elif request_type == 2:
+                await self._parse_file_metadata(reader, length)
+            elif request_type == 4:
+                await self._sender.send_status(self._status)
         except Exception as e:
             logging.error(e)
-            data = {
-                'errorMessage': str(e)
-            }
-            await self._send_message(data, 'error')
+            await self._sender.send_error(e)
         finally:
             writer.close()
 
-    async def _parse_file(self, reader, length):
+    async def _parse_file_metadata(self, reader: asyncio.StreamReader, length: int):
+        # parses file metadata from stream
         temp_file = str(uuid.uuid4())
         length_bytes = await reader.read(4)
         length -= 4
@@ -76,11 +73,13 @@ class Server:
         in_json = json.loads(message)
         current_file = File(in_json)
         length -= len(chunk)
-        successful = await self._read_file(reader, length, temp_file)
+        successful = await self._write_file(reader, length, temp_file)
         if successful:
             await self._process_file(current_file, temp_file)
 
-    async def _read_file(self, reader, length, filename):
+    @staticmethod
+    async def _write_file(reader: asyncio.StreamReader, length: int, filename: str):
+        # writes file from stream to drive
         logging.info(f"Writing {filename}, length {length}.")
         f = open(filename, "wb+")
         bytes_read = 0
@@ -102,7 +101,7 @@ class Server:
                 os.remove(filename)
                 return False
 
-    async def _process_file(self, current_file, temp_file):
+    async def _process_file(self, current_file: File, temp_file: str):
         file = current_file.filename
         file_type = current_file.type
         logging.info(f'Processing file {file}, type: {file_type}.')
@@ -119,22 +118,22 @@ class Server:
             os.rename(temp_file, path)
             self._upload.received_tests += 1
 
-    async def _check(self, upload_file):
+    async def _check(self, upload_file: str):
         ready = await self._ensure_ready()
         if not ready:
             message = {
                 'failedTests': self._upload.tests_count,
                 'successfulTests': 0,
-                'message': 'Only {} of {} tests were transfered!'.format(self._upload.received_tests, self._upload.tests_count * 2),
+                'message': 'Only {} of {} tests were transferred!'.format(self._upload.received_tests,
+                                                                          self._upload.tests_count * 2),
                 'status': 'Transfer error',
                 'type': 'Code',
                 'uploadId': self._upload.id
             }
-            self._upload = None
-            await self._send_message(message, 'result')
-            return
+            return await self._send_result(message)
 
         logging.info(f'Compiling file {upload_file}')
+        self._status = Status.Compiling
         compile_result = self._code_checker.compile(upload_file)
         if 'error' in compile_result:
             message = {
@@ -145,10 +144,10 @@ class Server:
                 'type': 'Code',
                 'uploadId': self._upload.id
             }
-            self._upload = None
-            await self._send_message(message, 'result')
-            return
+            return await self._send_result(message)
+
         logging.info('Running checker')
+        self._status = Status.Testing
         result = self._code_checker.run_checker(
             self._upload.checker_id, self._settings.tests_folder,
             self._upload.memory, self._upload.time)
@@ -161,9 +160,7 @@ class Server:
                 'type': 'Code',
                 'uploadId': self._upload.id
             }
-            self._upload = None
-            await self._send_message(message, 'result')
-            return
+            return await self._send_result(message)
         message = {
             'failedTests': result['failed_tests'],
             'successfulTests': result['passed_tests'],
@@ -172,40 +169,9 @@ class Server:
             'type': 'Code',
             'uploadId': self._upload.id
         }
-        self._upload = None
-        await self._send_message(message, 'result')
+        return await self._send_result(message)
 
-    async def _send_message(self, data, endpoint):
-        """Sends result to remote server
-
-        Arguments:
-            data {dict} -- json to send to remote
-            endpoint {string} -- endpoint to send data to
-        """
-        logging.info(f'Data: {data}')
-        tries = 0
-        successful = False
-        while not successful:
-            try:
-                if tries == self.max_tries:
-                    logging.error(f'Failed to send message to {endpoint}')
-                    break
-                r = requests.post(
-                    self._settings.api_server + endpoint, json=data)
-                successful = (r.status_code == 200)
-                # uncomment for testing
-                # break
-                logging.info(f'Endpoint: {endpoint}. Successful: {successful}')
-                if successful:
-                    break
-                await asyncio.sleep(5)
-                tries += 1
-            except:
-                logging.error(f'Failing to send data to {endpoint}')
-                await asyncio.sleep(5)
-                tries += 1
-
-    async def _parse_json(self, text):
+    async def _parse_json(self, text: str):
         """Parses json provided by user
 
         Arguments:
@@ -219,22 +185,24 @@ class Server:
         elif in_json['Type'] == 'checker':
             await self._parse_checker(in_json)
 
-    async def _parse_checker(self, checker_json):
+    async def _parse_checker(self, checker_json: dict):
         """Parses checker description and compiles it
 
         Arguments:
-            checker_json {dict} -- dict with id and code of checker
+            checker_json {dict} -- dict with checker_id and code of checker
         """
-        id = checker_json['Id']
+        self._status = Status.Compiling
+        checker_id = checker_json['Id']
         path = os.path.join(self._settings.checker_folder,
-                            id + '.cpp')
+                            checker_id + '.cpp')
         f = open(path, 'w+')
         f.write(checker_json['Code'])
         f.close()
-        logging.info(f'Compiling checker: {id}')
-        result = self._code_checker.compile_checker(id)
-        result['id'] = id
-        await self._send_message(result, 'checker-result')
+        logging.info(f'Compiling checker: {checker_id}')
+        result = self._code_checker.compile_checker(checker_id)
+        result['checker_id'] = checker_id
+        self._status = Status.Free
+        await self._sender.send_message(result, 'checker-result')
 
     async def _clean_tests(self):
         """Deletes all files in tests folder
@@ -258,7 +226,7 @@ class Server:
         """
         # wait for all tests to finish uploading
         tries = 0
-        max_tries = self.max_tries * 5
+        max_tries = self._max_tries
         while self._upload.tests_count * 2 != self._upload.received_tests:
             if tries == max_tries:
                 logging.error(f'Tests not uploaded for {self._upload.id}')
@@ -280,10 +248,15 @@ class Server:
 
     async def _wait_upload(self):
         tries = 0
-        max_tries = self.max_tries * 5
+        max_tries = self._max_tries
         while self._upload is None:
             if tries == max_tries:
-                logging.error(f'Upload manifset not transfered.')
+                logging.error(f'Upload manifest not transferred.')
                 return False
             tries += 1
             await asyncio.sleep(1)
+
+    async def _send_result(self, message: dict):
+        self._upload = None
+        self._status = Status.Free
+        return await self._sender.send_message(message, 'result')
