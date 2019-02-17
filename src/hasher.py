@@ -1,4 +1,5 @@
 import hashlib
+from glob import glob
 
 
 def get_files_hash(*args):
@@ -12,9 +13,8 @@ def get_files_hash(*args):
 
 
 def get_server_hash():
-    result = get_files_hash('./server.py', './checker.py',
-                            './models/upload.py', './models/sent_file.py',
-                            './models/settings.py')
+    files = glob("**/*.py", recursive=True)
+    result = get_files_hash(*files)
     return result
 
 
