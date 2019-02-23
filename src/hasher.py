@@ -13,7 +13,8 @@ def get_files_hash(*args):
 
 
 def get_server_hash():
-    files = glob("**/*.py", recursive=True)
+    files = glob('**/*.py', recursive=True)
+    files.extend(glob('**/*.json', recursive=True))
     result = get_files_hash(*files)
     return result
 

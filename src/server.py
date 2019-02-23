@@ -5,25 +5,24 @@ import uuid
 import logging
 from checker import CodeChecker
 from models import Status, Settings, File, Upload
+from models.limits import Limits
 from sender import Sender
 
 
 class Server:
-    _max_tries: int
     _sender: Sender
     _status: Status
     _code_checker: CodeChecker
     _upload: Upload
     _settings: Settings
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, checker: CodeChecker, sender: Sender):
         logging.info('Creating server')
-        self._max_tries = 25
         self._upload = None
         self._settings = settings
-        self._code_checker = CodeChecker(self._settings.checker_folder)
+        self._code_checker = checker
         self._status = Status.Free
-        self._sender = Sender(settings)
+        self._sender = sender
 
     async def start(self):
         logging.info('Starting server')
@@ -149,7 +148,7 @@ class Server:
         logging.info('Running checker')
         self._status = Status.Testing
         result = self._code_checker.run_checker(
-            self._upload.checker_id, self._settings.tests_folder,
+            self._upload.checker_id, upload_file,
             self._upload.memory, self._upload.time)
         if 'error' in result:
             message = {
@@ -226,9 +225,8 @@ class Server:
         """
         # wait for all tests to finish uploading
         tries = 0
-        max_tries = self._max_tries
         while self._upload.tests_count * 2 != self._upload.received_tests:
-            if tries == max_tries:
+            if tries == self._settings.max_try_time:
                 logging.error(f'Tests not uploaded for {self._upload.id}')
                 return False
             tries += 1
@@ -236,9 +234,8 @@ class Server:
 
         # wait for checker to finish compiling
         tries = 0
-        max_tries = self._code_checker.checker_compilation_max_time
         while self._code_checker.checker_compiling:
-            if tries == max_tries:
+            if tries == self._settings.max_try_time:
                 # should never actually get here
                 logging.error(f'Checker not compiled for {self._upload.id}')
                 return False
@@ -248,9 +245,8 @@ class Server:
 
     async def _wait_upload(self):
         tries = 0
-        max_tries = self._max_tries
         while self._upload is None:
-            if tries == max_tries:
+            if tries == self._settings.max_try_time:
                 logging.error(f'Upload manifest not transferred.')
                 return False
             tries += 1

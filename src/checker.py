@@ -2,20 +2,26 @@ from benchexec.runexecutor import RunExecutor
 from benchexec.check_cgroups import check_cgroup_availability
 import os
 from glob import glob
+from command_provider import CommandProvider
+from models import Settings
+from models.limits import Limits
 
 
 class CodeChecker:
-    def __init__(self, checker_folder):
+    def __init__(self, settings: Settings, limits: Limits, command_provider: CommandProvider):
         """Creates new instance
 
         Arguments:
-            checker_folder {string} -- path to folder with checkers
+            checker_folder {str} -- path to folder with checkers
+            tests_folder {str} -- path to folder with tests
         """
         check_cgroup_availability()
-        self.checker_folder = checker_folder
+        self.checker_folder = settings.checker_folder
+        self._data_folder = settings.tests_folder
+        self._command_provider = command_provider
         # checker compilation can be long, can be used to wait for finish
         self.checker_compiling = False
-        self.checker_compilation_max_time = 30
+        self._limits = limits
         self._output_log_file = 'run.log'
         self._output_file = './temp.out'
         self._separator = '--------------------------------------------------------------------------------'
@@ -36,10 +42,13 @@ class CodeChecker:
             OrderedDict -- dict with results
         """
         executor = RunExecutor()
+        if memory is None:
+            memory = self._limits.max_memory
         args = command.split(' ')
         try:
             result = executor.execute_run(
-                args, self._output_log_file, memlimit=memory, hardtimelimit=time, files_count_limit=file_count, stdin=stdin)
+                args, self._output_log_file, memlimit=memory, hardtimelimit=time,
+                files_count_limit=file_count, stdin=stdin)
             if 'cputime' in result and result['cputime'] > time:
                 result['terminationreason'] = 'cputime'
         except:
@@ -55,17 +64,13 @@ class CodeChecker:
         Returns:
             dict -- dictionary with code or error
         """
-        _, file_extension = os.path.splitext(filename)
-        if file_extension == ".cpp":
-            result = self._run_command('g++ -O2 -std=c++14 ' + filename +
-                                       ' -o compiled.run', 30000)
-        elif file_extension == ".c":
-            result = self._run_command("g++ -O2 -std=c11 " + filename +
-                                       " -o compiled.run", 30000)
-        elif file_extension == ".py":
-            result = {"error": "python is not supported"}
-        else:
-            result = {"error": "Unknown format!"}
+        command = self._command_provider.get_compile_command(filename)
+        if command is None:
+            result = {
+                'error': 'No suitable compiler found'
+            }
+            return result
+        result = self._run_command(command, self._limits.compilation_time)
         if 'terminationreason' in result or result['exitcode'] != 0:
             if self._copy_log():
                 result = {'error': self._get_log()}
@@ -73,7 +78,7 @@ class CodeChecker:
                 result = {'error': 'Compilation failed'}
         return result
 
-    def run_checker(self, checker_name: str, data_path: str, memory: int, time: float) -> dict:
+    def run_checker(self, checker_name: str, upload: str, memory: int, time: float) -> dict:
         """Runs checker
 
         Arguments:
@@ -89,7 +94,7 @@ class CodeChecker:
         if not os.path.isfile(checker_path):
             result = {'error': 'Checker is missing'}
             return result
-        input_file_format = os.path.join(data_path, '*.in')
+        input_file_format = os.path.join(self._data_folder, '*.in')
         input_files = glob(input_file_format)
         failed_tests = 0
         passed_tests = 0
@@ -99,49 +104,60 @@ class CodeChecker:
             if not os.path.isfile(output_file):
                 result = {'error': 'Output file for test is missing'}
                 return result
+            output_found = self._run_upload(upload, memory, time, filename)
+            if not output_found:
+                failed_tests += 1
+                continue
             test_result = self._run_test(
-                checker_path, filename, output_file, memory, time)
+                checker_path, filename, output_file)
             if 'error' in test_result:
-                if test_result['error'] == 'Checker is not working':
-                    return test_result
-                failed_tests = failed_tests + 1
+                failed_tests += 1
             elif 'code' in test_result and test_result['code'] == 0:
-                passed_tests = passed_tests + 1
+                passed_tests += 1
             else:
-                failed_tests = failed_tests + 1
+                failed_tests += 1
         result = {
             'passed_tests': passed_tests,
             'failed_tests': failed_tests
         }
         return result
 
-    def _run_test(self, checker: str, input_path: str, output_path: str, memory: int, time: float) -> dict:
+    def _run_test(self, checker: str, input_path: str, output_path: str) -> dict:
         """Runs checker for specified files
 
         Arguments:
             checker {str} -- name of checker
             input_path {str} -- name of input file
             output_path {str} -- name of correct output file
-            memory {int} -- memory limit in bytes
-            time {float} -- time limit in seconds
 
         Returns:
             dict -- dictionary with error or exit code
         """
-        with open(input_path, "r") as input:
-            self._run_command(
-                "./compiled.run", time,
-                memory=memory, file_count=1, stdin=input)
-        result_exists = self._copy_log()
-        if not result_exists:
-            result = {'error': 'User output is empty'}
-            return result
-        result = self._run_command(" ".join([checker, input_path, self._output_file, output_path]), time,
-                                   memory=memory, file_count=0)
+        result = self._run_command(" ".join([checker, input_path, self._output_file, output_path]),
+                                   self._limits.compilation_time, file_count=0)
         result = {'code': result['exitcode']}
         if 'terminationreason' in result:
             result['error'] = 'Checker is not working'
         return result
+
+    def _run_upload(self, upload: str, memory: int, time: float, input_path: str) -> bool:
+        """Runs checker for specified files
+
+        Arguments:
+                upload {str} -- name of upload
+                memory {int} -- memory limit in bytes
+                time {float} -- time limit in seconds
+
+        Returns:
+            dict -- dictionary with error or exit code
+        """
+        command = self._command_provider.get_run_command(upload)
+        with open(input_path, "r") as input_stream:
+            self._run_command(
+                command, time,
+                memory=memory, file_count=1, stdin=input_stream)
+        result_exists = self._copy_log()
+        return result_exists
 
     def compile_checker(self, name: str) -> dict:
         """Compiles checker
@@ -156,7 +172,7 @@ class CodeChecker:
         path = os.path.join(self.checker_folder, name + '.cpp')
         result_path = os.path.join(self.checker_folder, name + '.run')
         result = self._run_command("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
-                                   " -o " + result_path, self.checker_compilation_max_time * 1000)
+                                   " -o " + result_path, self._limits.compilation_time)
         code = result['exitcode']
         compilation_result = {
             'compiled': code == 0,

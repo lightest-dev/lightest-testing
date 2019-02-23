@@ -1,6 +1,10 @@
 import asyncio
 import json
+from command_provider import CommandProvider
+from models.limits import Limits
+from sender import Sender
 from server import Server
+from checker import CodeChecker
 import logging
 from models import Settings
 import socket
@@ -14,7 +18,17 @@ if __name__ == "__main__":
         data = json.load(f)
         logging.info(f'Config: {data}')
         settings = Settings.from_json(data)
+    with open('languages.json') as f:
+        data = json.load(f)
+        provider = CommandProvider()
+        provider.add_languages(*data)
+    with open('limits.json') as f:
+        data = json.load(f)
+        logging.info(f'Limits: {data}')
+        limits = Limits.from_json(data)
     logging.info(f'Local ip: {local_ip_address}')
     settings.ip = local_ip_address
-    current_server = Server(settings)
+    checker = CodeChecker(settings, limits, provider)
+    sender = Sender(settings)
+    current_server = Server(settings, checker, sender)
     asyncio.run(current_server.start())

@@ -1,5 +1,6 @@
 {
     "apiServer": "api_server",
     "checkerFolder": "./checkers",
-    "testsFolder": "./tests"
+    "testsFolder": "./tests",
+    "maxTryTime": 30
 }

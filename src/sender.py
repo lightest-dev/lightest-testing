@@ -11,7 +11,6 @@ class Sender:
 
     def __init__(self, settings: Settings):
         self._settings = settings
-        self._max_tries = 5
 
     async def send_message(self, data: dict, endpoint: str):
         """Sends result to remote server
@@ -25,7 +24,7 @@ class Sender:
         successful = False
         while not successful:
             try:
-                if tries == self._max_tries:
+                if tries >= self._settings.max_try_time:
                     logging.error(f'Failed to send message to {endpoint}')
                     break
                 r = requests.post(
@@ -35,11 +34,11 @@ class Sender:
                 if successful:
                     break
                 await asyncio.sleep(5)
-                tries += 1
+                tries += 5
             except:
                 logging.error(f'Failing to send data to {endpoint}')
                 await asyncio.sleep(5)
-                tries += 1
+                tries += 5
 
     async def send_status(self, status: Status):
         message = {

@@ -1,0 +1,17 @@
+[
+  {
+    "extension": ".cpp",
+    "compileCommand": "g++ -O2 -std=c++14 <filename> -o <filename>.run",
+    "runCommand": "<filename>.run"
+  },
+  {
+    "extension": ".c",
+    "compileCommand": "g++ -O2 -std=c11 <filename> -o <filename>.run",
+    "runCommand": "<filename>.run"
+  },
+  {
+    "extension": ".py",
+    "compileCommand": "python3.7 -m py_compile <filename>",
+    "runCommand": "python3.7 <filename>"
+  }
+]
