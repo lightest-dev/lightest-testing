@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+option csharp_namespace = "GrpcServices";
+
+service CodeTester {
+    rpc CompileChecker (CheckerRequest) returns (CheckerResponse);
+    rpc TestUpload (TestingRequest) returns (TestingResponse);
+    rpc GetStatus (CheckerStatusRequest) returns (CheckerStatusResponse);
+}
+
+message CheckerRequest {
+    string id = 1;
+    string code = 2;
+}
+
+message CheckerResponse {
+    string id = 1;
+    string message = 2;
+    bool compiled = 3;
+}
+
+message Test {
+    string testName = 1;
+    string input = 2;
+    string output = 3;
+}
+
+message CodeFile {
+    string fileName = 1;
+    string code = 2;
+}
+
+message TestingRequest {
+    string uploadId = 1;
+    int32 memoryLimit = 2;
+    int32 timeLimit = 3;
+    string checkerId = 4;
+    repeated Test tests = 5;
+    CodeFile codeFile = 6;
+}
+
+message TestingResponse {
+    string uploadId = 1;
+    bool testingFailed = 2;
+    string message = 3;
+    string status = 4;
+    int32 successfulTestsCount = 5;
+    int32 failedTestsCount = 6;
+}
+
+message CheckerStatusRequest {
+}
+
+message CheckerStatusResponse {
+    bool free = 1;
+    string serverStatus = 2;
+}

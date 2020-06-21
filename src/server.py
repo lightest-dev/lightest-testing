@@ -5,7 +5,6 @@ import uuid
 import logging
 from checker import CodeChecker
 from models import Status, Settings, File, Upload
-from models.limits import Limits
 from sender import Sender
 
 
