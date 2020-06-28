@@ -5,6 +5,7 @@ from glob import glob
 from command_provider import CommandProvider
 from models import Settings
 from models.limits import Limits
+from models.status import Status
 
 
 class CodeChecker:
@@ -19,8 +20,7 @@ class CodeChecker:
         self.checker_folder = settings.checker_folder
         self._data_folder = settings.tests_folder
         self._command_provider = command_provider
-        # checker compilation can be long, can be used to wait for finish
-        self.checker_compiling = False
+        self.status = Status.Free
         self._limits = limits
         self._output_log_file = 'run.log'
         self._output_file = './temp.out'
@@ -64,11 +64,13 @@ class CodeChecker:
         Returns:
             dict -- dictionary with code or error
         """
+        self.status = Status.Compiling
         command = self._command_provider.get_compile_command(filename)
         if command is None:
             result = {
                 'error': 'No suitable compiler found'
             }
+            self.status = Status.Free
             return result
         result = self._run_command(command, self._limits.compilation_time)
         if 'terminationreason' in result or result['exitcode'] != 0:
@@ -76,6 +78,7 @@ class CodeChecker:
                 result = {'error': self._get_log()}
             else:
                 result = {'error': 'Compilation failed'}
+        self.status = Status.Free
         return result
 
     def run_checker(self, checker_name: str, upload: str, memory: int, time: float) -> dict:
@@ -90,9 +93,11 @@ class CodeChecker:
         Returns:
             dict -- dictionary with passed_tests and failed_tests or with error if there is error with tests
         """
+        self.status = Status.Testing
         checker_path = os.path.join(self.checker_folder, checker_name + ".run")
         if not os.path.isfile(checker_path):
             result = {'error': 'Checker is missing'}
+            self.status = Status.Free
             return result
         input_file_format = os.path.join(self._data_folder, '*.in')
         input_files = glob(input_file_format)
@@ -103,6 +108,7 @@ class CodeChecker:
             output_file = file_path + '.out'
             if not os.path.isfile(output_file):
                 result = {'error': 'Output file for test is missing'}
+                self.status = Status.Free
                 return result
             output_found = self._run_upload(upload, memory, time, filename)
             if not output_found:
@@ -120,6 +126,7 @@ class CodeChecker:
             'passed_tests': passed_tests,
             'failed_tests': failed_tests
         }
+        self.status = Status.Free
         return result
 
     def _run_test(self, checker: str, input_path: str, output_path: str) -> dict:
@@ -168,7 +175,7 @@ class CodeChecker:
         Returns:
             dict -- dictionary with error or exitcode
         """
-        self.checker_compiling = True
+        self.status = Status.CompilingChecker
         path = os.path.join(self.checker_folder, name + '.cpp')
         result_path = os.path.join(self.checker_folder, name + '.run')
         result = self._run_command("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
@@ -185,7 +192,7 @@ class CodeChecker:
                 compilation_result['message'] = self._get_log()
             else:
                 compilation_result['message'] = 'Something went wrong with checker!'
-        self.checker_compiling = False
+        self.status = Status.Free
         return compilation_result
 
     def _copy_log(self) -> bool:

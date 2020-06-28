@@ -1,9 +1,7 @@
-import asyncio
 import json
 from command_provider import CommandProvider
 from models.limits import Limits
 from sender import Sender
-from server import Server
 from checker import CodeChecker
 import logging
 from models import Settings
@@ -30,5 +28,3 @@ if __name__ == "__main__":
     settings.ip = local_ip_address
     checker = CodeChecker(settings, limits, provider)
     sender = Sender(settings)
-    current_server = Server(settings, checker, sender)
-    asyncio.run(current_server.start())

@@ -11,7 +11,7 @@
   },
   {
     "extension": ".py",
-    "compileCommand": "python3.7 -m py_compile <filename>",
-    "runCommand": "python3.7 <filename>"
+    "compileCommand": "python3.8 -m py_compile <filename>",
+    "runCommand": "python3.8 <filename>"
   }
 ]

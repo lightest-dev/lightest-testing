@@ -1,8 +1,7 @@
-import asyncio
+import time
 import logging
-from models import Status, Settings
+from models import Settings
 import requests
-from hasher import get_server_hash
 
 
 class Sender:
@@ -12,7 +11,7 @@ class Sender:
     def __init__(self, settings: Settings):
         self._settings = settings
 
-    async def send_message(self, data: dict, endpoint: str):
+    def send_message(self, data: dict, endpoint: str):
         """Sends result to remote server
 
         Arguments:
@@ -33,32 +32,16 @@ class Sender:
                 logging.info(f'Endpoint: {endpoint}. Successful: {successful}')
                 if successful:
                     break
-                await asyncio.sleep(5)
+                time.sleep(5)
                 tries += 5
             except:
                 logging.error(f'Failing to send data to {endpoint}')
-                await asyncio.sleep(5)
+                time.sleep(5)
                 tries += 5
 
-    async def send_status(self, status: Status):
-        message = {
-            'status': status.name
-        }
-        await self.send_message(message, 'status')
-
-    async def notify_started(self):
-        # wait for server to properly initialize
-        await asyncio.sleep(20)
+    def notify_started(self):
         logging.info('Sending notification')
-        server_hash = get_server_hash()
         message = {
             'ip': self._settings.ip,
-            'serverVersion': server_hash
         }
-        await self.send_message(message, 'new')
-
-    async def send_error(self, ex: Exception):
-        data = {
-            'errorMessage': str(ex)
-        }
-        await self.send_message(data, 'error')
+        self.send_message(message, 'new')
