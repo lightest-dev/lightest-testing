@@ -1,14 +1,14 @@
 language: python
-dist: xenial
+dist: bionic
 python:
-  - "3.7"
+  - "3.8"
 
 services:
   - docker
 
 env:
   global:
-    - VERSION: 0.9.1.${TRAVIS_BUILD_NUMBER}
+    - VERSION: 0.10.0.${TRAVIS_BUILD_NUMBER}
     - API_SERVER: https://api.lightest.xyz/testing/
 
 script:
