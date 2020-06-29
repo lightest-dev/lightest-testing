@@ -1,7 +1,7 @@
-from benchexec.runexecutor import RunExecutor
-from benchexec.check_cgroups import check_cgroup_availability
 import os
 from glob import glob
+from benchexec.runexecutor import RunExecutor
+from benchexec.check_cgroups import check_cgroup_availability
 from command_provider import CommandProvider
 from models import Settings
 from models.limits import Limits
@@ -16,7 +16,7 @@ class CodeChecker:
             checker_folder {str} -- path to folder with checkers
             tests_folder {str} -- path to folder with tests
         """
-        check_cgroup_availability()
+        # check_cgroup_availability()
         self.checker_folder = settings.checker_folder
         self._data_folder = settings.tests_folder
         self._command_provider = command_provider
@@ -41,7 +41,7 @@ class CodeChecker:
         Returns:
             OrderedDict -- dict with results
         """
-        executor = RunExecutor()
+        executor = RunExecutor(use_namespaces=False)
         if memory is None:
             memory = self._limits.max_memory
         args = command.split(' ')
@@ -73,7 +73,7 @@ class CodeChecker:
             self.status = Status.Free
             return result
         result = self._run_command(command, self._limits.compilation_time)
-        if 'terminationreason' in result or result['exitcode'] != 0:
+        if 'terminationreason' in result or result['exitcode'].value != 0:
             if self._copy_log():
                 result = {'error': self._get_log()}
             else:
@@ -142,7 +142,7 @@ class CodeChecker:
         """
         result = self._run_command(" ".join([checker, input_path, self._output_file, output_path]),
                                    self._limits.compilation_time, file_count=0)
-        result = {'code': result['exitcode']}
+        result = {'code': result['exitcode'].value}
         if 'terminationreason' in result:
             result['error'] = 'Checker is not working'
         return result
@@ -180,7 +180,7 @@ class CodeChecker:
         result_path = os.path.join(self.checker_folder, name + '.run')
         result = self._run_command("g++ -I " + self.checker_folder + " -O2 -std=c++11 " + path +
                                    " -o " + result_path, self._limits.compilation_time)
-        code = result['exitcode']
+        code = result['exitcode'].value
         compilation_result = {
             'compiled': code == 0,
             'message': ''

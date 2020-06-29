@@ -6,6 +6,8 @@ cp -R ./src/* ./dist
 sed -i "s|api_server|${API_SERVER}|" ./dist/settings.json
 cat ./dist/settings.json
 mkdir ./dist/checkers
+mkdir ./dist/tests
+rm -rf ./dist/*/*pycache* ./dist/*pycache*
 cp ./testlib/testlib.h ./dist/checkers/
 docker build \
 --build-arg version=$VERSION \

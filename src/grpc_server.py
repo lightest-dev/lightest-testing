@@ -1,7 +1,7 @@
+from checker import CodeChecker
 from models import Status
 from protos.CodeTester_pb2 import *
 from protos.CodeTester_pb2_grpc import CodeTesterServicer
-from src.checker import CodeChecker
 from models.settings import Settings
 import os
 import logging
@@ -16,10 +16,12 @@ class GrpcServer(CodeTesterServicer):
         self._settings = settings
 
     def CompileChecker(self, request: CheckerRequest, context) -> CheckerResponse:
+        if self._code_checker.status != Status.Free:
+            raise RuntimeError('Server is not free')
         checker_id = request.id
         path = os.path.join(self._settings.checker_folder,
                             checker_id + '.cpp')
-        with open(path, 'w+') as checker_file:
+        with open(path, 'w') as checker_file:
             checker_file.write(request.code)
         logging.info(f'Compiling checker: {checker_id}')
         result = self._code_checker.compile_checker(checker_id)
@@ -28,12 +30,14 @@ class GrpcServer(CodeTesterServicer):
     def GetStatus(self, request: CheckerStatusRequest, context) -> CheckerStatusResponse:
         status = self._code_checker.status
         is_free = status == Status.Free
-        return CheckerStatusResponse(free=is_free, status=status)
+        return CheckerStatusResponse(free=is_free, serverStatus=status.name)
 
     def TestUpload(self, request: TestingRequest, context) -> TestingResponse:
+        if self._code_checker.status != Status.Free:
+            raise RuntimeError('Server is not free')
         self._clean_tests()
         code_path = os.path.join('./', request.codeFile.fileName)
-        with open(code_path, 'w+') as code_file:
+        with open(code_path, 'w') as code_file:
             code_file.write(request.codeFile.code)
 
         logging.info(f'Compiling file {code_path}')
@@ -45,17 +49,22 @@ class GrpcServer(CodeTesterServicer):
 
         logging.info('Writing tests')
         for test in request.tests:
-            input_path = os.path.join(self._settings.tests_folder, test.testName + '.in')
-            output_path = os.path.join(self._settings.tests_folder, test.testName + '.out')
-            with open(input_path, 'w+') as input_file:
+            input_path = os.path.join(
+                self._settings.tests_folder, test.testName + '.in')
+            output_path = os.path.join(
+                self._settings.tests_folder, test.testName + '.out')
+            with open(input_path, 'w') as input_file:
                 input_file.write(test.input)
-            with open(output_path, 'w+') as output_file:
+            with open(output_path, 'w') as output_file:
                 output_file.write(test.output)
 
         logging.info('Running checker')
         result = self._code_checker.run_checker(
             request.checkerId, code_path,
-            request.memoryLimit, request.timeLimit / 1000)
+            # convert memory to bytes from MB
+            request.memoryLimit * (2**20),
+            # convert time to s from ms
+            request.timeLimit / 1000)
 
         if 'error' in result:
             return TestingResponse(uploadId=request.uploadId, testingFailed=True, message=result['error'],
