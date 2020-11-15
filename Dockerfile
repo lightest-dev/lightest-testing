@@ -15,9 +15,10 @@ LABEL org.label-schema.maintainer="Andrii Vasylyk" \
     org.label-schema.dockerfile="/Dockerfile"
 
 RUN apt update \
-    && apt install -y wget python3.8 g++ python3-tempita \
+    && apt install --no-install-recommends -y wget python3.8 g++ python3-tempita \
     python3-yaml python3-requests python3-pip \
-    python3-protobuf && rm -rf /var/lib/apt/lists/* \
+    python3-protobuf fp-compiler-3.0.4 fp-units-base-3.0.4 fp-units-rtl-3.0.4 \
+    && rm -rf /var/lib/apt/lists/* \
     && pip3 install grpcio
 RUN wget https://github.com/sosy-lab/benchexec/releases/download/2.7/benchexec_2.7-1_all.deb && apt install --install-recommends ./benchexec_*.deb && rm benchexec_*.deb
 RUN usermod -a -G benchexec root

@@ -13,5 +13,10 @@
     "extension": ".py",
     "compileCommand": "python3.8 -m py_compile <filename>",
     "runCommand": "python3.8 <filename>"
+  },
+  {
+    "extension": ".pp",
+    "compileCommand": "fpc <filename> -o<filename>.run",
+    "runCommand": "<filename>.run"
   }
 ]
