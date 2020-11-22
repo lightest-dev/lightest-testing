@@ -16,7 +16,7 @@ class CodeChecker:
             checker_folder {str} -- path to folder with checkers
             tests_folder {str} -- path to folder with tests
         """
-        # check_cgroup_availability()
+        check_cgroup_availability()
         self.checker_folder = settings.checker_folder
         self._data_folder = settings.tests_folder
         self._command_provider = command_provider
@@ -47,7 +47,7 @@ class CodeChecker:
         args = command.split(' ')
         try:
             result = executor.execute_run(
-                args, self._output_log_file, memlimit=memory, hardtimelimit=time,
+                args, self._output_log_file, memlimit=memory, hardtimelimit=time, walltimelimit=time,
                 files_count_limit=file_count, stdin=stdin)
             if 'cputime' in result and result['cputime'] > time:
                 result['terminationreason'] = 'cputime'
